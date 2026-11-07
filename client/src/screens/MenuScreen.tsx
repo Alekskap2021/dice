@@ -4,6 +4,9 @@ import { actions, useStore } from '../store.ts';
 
 const TARGETS = [1000, 2000, 3000, 4000, 5000];
 
+/** В странице-превью без сервера сетевая игра недоступна. Флаг ставит страница-обёртка. */
+const isPreview = Reflect.get(window, '__KOSTI_PREVIEW__') === true;
+
 export const MenuScreen = () => {
   const name = useStore((s) => s.name);
   const target = useStore((s) => s.target);
@@ -64,6 +67,10 @@ export const MenuScreen = () => {
           <Button variant="primary" size="lg" block onClick={actions.startBot}>
             Играть с ботом
           </Button>
+          {isPreview ? (
+            <p className="hint">Сетевая игра в превью недоступна: она работает только на сервере.</p>
+          ) : (
+            <>
           <Button size="lg" block onClick={() => actions.startOnline('create')}>
             Создать комнату
           </Button>
@@ -80,6 +87,8 @@ export const MenuScreen = () => {
             />
             <Button onClick={join}>Войти</Button>
           </div>
+            </>
+          )}
           <Button variant="ghost" block onClick={() => actions.setRulesOpen(true)}>
             Правила игры
           </Button>
