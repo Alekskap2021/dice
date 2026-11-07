@@ -1,0 +1,135 @@
+/* Компоненты дизайн-системы на Base UI. Состояния берём из data-атрибутов Base UI. */
+
+/* ---------- Button ---------- */
+.ui-button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
+  min-height: 44px; padding: 0 18px;
+  font: 600 15px/1 var(--font-ui);
+  color: var(--text);
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s var(--ease), box-shadow 0.15s, opacity 0.15s;
+}
+.ui-button:hover:not([data-disabled]) { background: var(--border-strong); }
+.ui-button:active:not([data-disabled]) { transform: scale(0.97); }
+.ui-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ui-button[data-disabled] { opacity: 0.4; cursor: not-allowed; }
+.ui-button[data-variant='primary'] { color: var(--accent-contrast); background: var(--accent); border-color: transparent; }
+.ui-button[data-variant='primary']:hover:not([data-disabled]) { background: var(--accent-hover); }
+.ui-button[data-variant='ghost'] { background: transparent; border-color: transparent; color: var(--text-muted); }
+.ui-button[data-variant='ghost']:hover:not([data-disabled]) { background: var(--surface-3); color: var(--text); }
+.ui-button[data-size='lg'] { min-height: 52px; padding: 0 24px; font-size: 16px; }
+.ui-button[data-size='icon'] { min-height: 40px; width: 40px; padding: 0; border-radius: 50%; }
+.ui-button[data-block] { width: 100%; }
+
+/* ---------- Kbd ---------- */
+.ui-kbd {
+  display: inline-grid; place-items: center;
+  min-width: 22px; height: 22px; padding: 0 6px;
+  font: 600 12px/1 var(--font-ui);
+  color: inherit;
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  border: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+  border-radius: 6px;
+}
+
+/* ---------- Input ---------- */
+.ui-input {
+  width: 100%; min-height: 44px; padding: 0 14px;
+  font: 500 16px var(--font-ui);
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-md);
+  outline: none;
+  user-select: text;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+.ui-input::placeholder { color: var(--text-faint); }
+.ui-input:focus-visible { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* ---------- ChipGroup (ToggleGroup) ---------- */
+.ui-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ui-chip {
+  min-height: 38px; padding: 0 14px;
+  font: 600 14px var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.1s var(--ease);
+}
+.ui-chip:hover { color: var(--text); border-color: var(--text-faint); }
+.ui-chip:active { transform: scale(0.96); }
+.ui-chip[data-pressed] { color: var(--accent-contrast); background: var(--accent); border-color: transparent; }
+.ui-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------- Switch ---------- */
+.ui-switch-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; font: 500 14px var(--font-ui); }
+.ui-switch {
+  position: relative; flex: none;
+  width: 40px; height: 24px; padding: 0;
+  background: var(--surface-3);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.ui-switch[data-checked] { background: var(--accent); border-color: transparent; }
+.ui-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ui-switch-thumb {
+  display: block; width: 18px; height: 18px; margin: 2px;
+  background: var(--text);
+  border-radius: 50%;
+  transition: transform 0.2s var(--ease), background 0.2s;
+}
+.ui-switch-thumb[data-checked] { transform: translateX(16px); background: var(--accent-contrast); }
+
+/* ---------- Progress ---------- */
+.ui-progress-track { height: 6px; background: var(--surface-3); border-radius: 999px; overflow: hidden; }
+.ui-progress-indicator { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.8s var(--ease); }
+
+/* ---------- Popover ---------- */
+.ui-popover {
+  min-width: 240px; padding: 14px;
+  display: grid; gap: 14px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  transform-origin: var(--transform-origin);
+  transition: opacity 0.15s, transform 0.15s var(--ease);
+}
+.ui-popover[data-starting-style], .ui-popover[data-ending-style] { opacity: 0; transform: scale(0.95); }
+.ui-popover-title { margin: 0; font: 600 12px var(--font-ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
+
+/* ---------- Dialog ---------- */
+.ui-backdrop {
+  position: fixed; inset: 0; z-index: 30;
+  background: var(--scrim);
+  backdrop-filter: blur(6px);
+  transition: opacity 0.2s;
+}
+.ui-backdrop[data-starting-style], .ui-backdrop[data-ending-style] { opacity: 0; }
+.ui-dialog {
+  position: fixed; z-index: 31; top: 50%; left: 50%;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px); overflow: auto;
+  padding: 28px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  transform: translate(-50%, -50%);
+  transition: opacity 0.2s, transform 0.25s var(--ease);
+}
+.ui-dialog[data-starting-style], .ui-dialog[data-ending-style] { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
+.ui-dialog-title { margin: 0 0 4px; font: 700 30px/1.1 var(--font-display); letter-spacing: 0.01em; }
+.ui-dialog-description { margin: 0 0 18px; color: var(--text-muted); font-size: 15px; line-height: 1.5; }

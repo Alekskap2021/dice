@@ -1,0 +1,54 @@
+/* Токены дизайн-системы. Любой цвет, шрифт и отступ в интерфейсе берётся отсюда. */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0d0c0b;
+  --surface: #171513;
+  --surface-2: #201d1a;
+  --surface-3: #2a2622;
+  --border: #2f2a25;
+  --border-strong: #4a4239;
+  --text: #f3eee5;
+  --text-muted: #aaa194;
+  --text-faint: #7b7368;
+  --accent: #e0ac47;
+  --accent-hover: #ecbb5f;
+  --accent-contrast: #1b1306;
+  --accent-soft: rgba(224, 172, 71, 0.15);
+  --danger: #f0725d;
+  --ok: #7cc780;
+  --scrim: rgba(8, 7, 6, 0.64);
+  --vignette: rgba(4, 3, 2, 0.7);
+  --shadow: 0 16px 48px rgba(0, 0, 0, 0.55);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f5f2eb;
+  --surface: #fffdf9;
+  --surface-2: #f1ece1;
+  --surface-3: #e7e0d1;
+  --border: #ddd5c4;
+  --border-strong: #c2b8a2;
+  --text: #1c1a16;
+  --text-muted: #675f52;
+  --text-faint: #968d7d;
+  --accent: #b27312;
+  --accent-hover: #9d640e;
+  --accent-contrast: #ffffff;
+  --accent-soft: rgba(178, 115, 18, 0.12);
+  --danger: #c4402c;
+  --ok: #3b8a42;
+  --scrim: rgba(245, 242, 235, 0.66);
+  --vignette: rgba(40, 28, 10, 0.25);
+  --shadow: 0 16px 48px rgba(70, 48, 12, 0.2);
+}
+
+:root {
+  --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}

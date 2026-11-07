@@ -264,6 +264,7 @@ export const createDiceTable = (container: HTMLElement): DiceTable => {
     });
 
   const throwDice = async (indices: number[], values: number[]): Promise<void> => {
+    audio.rattle(indices.length);
     const jobs = indices.map((index, order) => {
       const die = dice[index];
       const value = values[order] ?? 1;
@@ -283,8 +284,9 @@ export const createDiceTable = (container: HTMLElement): DiceTable => {
       const bounces = 2.5;
       const delay = order * 0.05;
 
+      const pan = die.homeX / 6;
       [0.2, 0.6, 1].forEach((fraction, k) =>
-        window.setTimeout(() => audio.clack(0, k === 2 ? 0.55 : 0.9 - k * 0.2), (delay + duration * fraction) * 1000),
+        window.setTimeout(() => audio.clack(0, k === 2 ? 0.4 : 0.95 - k * 0.3, pan), (delay + duration * fraction) * 1000),
       );
 
       const spinQuat = new THREE.Quaternion();
