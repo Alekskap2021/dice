@@ -1,6 +1,32 @@
 import { Button, Input } from '../ui/index.ts';
 import { actions, useStore } from '../store.ts';
 
+/** Копирует текст. Буфер обмена браузера работает только на https и localhost, поэтому на обычном http запасной путь — скрытое поле и execCommand. */
+const copyText = async (text: string): Promise<boolean> => {
+  if (window.isSecureContext && navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch {
+      /* пробуем запасной способ */
+    }
+  }
+  const field = document.createElement('textarea');
+  field.value = text;
+  field.setAttribute('readonly', '');
+  field.style.cssText = 'position:fixed;top:0;left:0;opacity:0;';
+  document.body.appendChild(field);
+  field.select();
+  field.setSelectionRange(0, text.length);
+  try {
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    field.remove();
+  }
+};
+
 export const LobbyScreen = () => {
   const room = useStore((s) => s.room);
   const error = useStore((s) => s.lobbyError);
@@ -10,12 +36,8 @@ export const LobbyScreen = () => {
   const isHost = room.you === 0;
 
   const copy = async (): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(link);
-      actions.notify('Ссылка скопирована');
-    } catch {
-      actions.notify('Скопируйте ссылку вручную');
-    }
+    if (await copyText(link)) actions.notify('Ссылка скопирована');
+    else actions.notify('Не удалось скопировать: выделите ссылку и скопируйте вручную');
   };
 
   const share = (): void => {

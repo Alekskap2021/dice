@@ -23,7 +23,6 @@
 
 :root {
   --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;

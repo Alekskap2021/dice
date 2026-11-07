@@ -149,5 +149,5 @@
   transition: opacity 0.2s, transform 0.25s var(--ease);
 }
 .ui-dialog[data-starting-style], .ui-dialog[data-ending-style] { opacity: 0; transform: translate(-50%, -48%) scale(0.97); }
-.ui-dialog-title { margin: 0 0 4px; font: 700 30px/1.1 var(--font-display); letter-spacing: 0.01em; }
+.ui-dialog-title { margin: 0 0 4px; font: 700 26px/1.15 var(--font-ui); letter-spacing: -0.01em; }
 .ui-dialog-description { margin: 0 0 18px; color: var(--text-muted); font-size: 15px; line-height: 1.5; }
