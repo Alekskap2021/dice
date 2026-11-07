@@ -90,6 +90,24 @@
 }
 .ui-switch-thumb[data-checked] { transform: translateX(16px); background: var(--accent-contrast); }
 
+/* ---------- Slider ---------- */
+.ui-slider-row { display: grid; gap: 10px; font: 500 14px var(--font-ui); }
+.ui-slider-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+.ui-slider-value { font: 600 13px var(--font-ui); font-variant-numeric: tabular-nums; color: var(--text-muted); }
+.ui-slider-control { display: flex; align-items: center; height: 24px; touch-action: none; cursor: pointer; }
+.ui-slider-track { position: relative; width: 100%; height: 6px; background: var(--surface-3); border-radius: 999px; }
+.ui-slider-indicator { height: 100%; background: var(--accent); border-radius: 999px; }
+.ui-slider-thumb {
+  width: 18px; height: 18px;
+  background: var(--text);
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+  transition: transform 0.12s var(--ease);
+}
+.ui-slider-thumb:hover, .ui-slider-thumb[data-dragging] { transform: scale(1.12); }
+.ui-slider-thumb:has(:focus-visible) { outline: 2px solid var(--accent); outline-offset: 3px; }
+
 /* ---------- Progress ---------- */
 .ui-progress-track { height: 6px; background: var(--surface-3); border-radius: 999px; overflow: hidden; }
 .ui-progress-indicator { height: 100%; background: var(--accent); border-radius: 999px; transition: width 0.8s var(--ease); }

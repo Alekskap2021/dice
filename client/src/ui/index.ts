@@ -5,4 +5,5 @@ export { Input } from './Input.tsx';
 export { Kbd } from './Kbd.tsx';
 export { Popover } from './Popover.tsx';
 export { ProgressBar } from './ProgressBar.tsx';
+export { Slider } from './Slider.tsx';
 export { Switch } from './Switch.tsx';

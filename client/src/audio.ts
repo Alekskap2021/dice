@@ -1,10 +1,13 @@
 /**
  * Звук без внешних файлов.
- * - Стук кубиков: модальный синтез удара кости о дерево (несколько затухающих резонансов, щелчок, «пинг»),
- *   заранее рендерится в буферы с вариациями, играется с разной скоростью и громкостью.
+ * - Стук кубиков: настоящая запись удара одного кубика о стол (встроена в код). Для шести кубиков запись
+ *   «размножается»: каждый кубик играет её со своей скоростью, тембром, фазой и положением в стереопанораме,
+ *   а повторные подскоки берут короткие срезы удара. Пока запись декодируется, звучит синтезированный запасной удар.
  * - Музыка: лютня (алгоритм Карплюса — Стронга), дудка, бурдон и бубен играют джигу в ре-дорийском ладу.
  * - Небольшая комната (свёрточная реверберация) склеивает всё в один звук.
  */
+
+import { DICE_SAMPLE_BASE64 } from './sounds/diceSample.ts';
 
 type Bus = GainNode;
 
@@ -16,10 +19,13 @@ let reverb: ConvolverNode;
 let noiseBuffer: AudioBuffer;
 let hitBuffers: AudioBuffer[] = [];
 let coinBuffer: AudioBuffer;
+let diceBuffer: AudioBuffer | null = null;
 const pluckCache = new Map<number, AudioBuffer>();
 
-let sfxOn = true;
-let musicOn = true;
+/** Громкость от 0 до 1. */
+let sfxVolume = 0.8;
+let musicVolume = 0.5;
+const MUSIC_GAIN = 0.6;
 
 const rand = (): number => Math.random();
 
@@ -99,6 +105,17 @@ const renderCoin = (c: AudioContext): AudioBuffer => {
   return buffer;
 };
 
+const decodeDiceSample = async (c: AudioContext): Promise<void> => {
+  try {
+    const binary = atob(DICE_SAMPLE_BASE64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    diceBuffer = await c.decodeAudioData(bytes.buffer);
+  } catch (error) {
+    console.warn('Не удалось декодировать звук кубика, используется синтез', error);
+  }
+};
+
 const ensure = (): AudioContext | null => {
   if (ctx) return ctx;
   const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -114,7 +131,8 @@ const ensure = (): AudioContext | null => {
 
   sfxBus = c.createGain();
   musicBus = c.createGain();
-  musicBus.gain.value = musicOn ? 0.6 : 0;
+  sfxBus.gain.value = sfxVolume;
+  musicBus.gain.value = MUSIC_GAIN * musicVolume;
   sfxBus.connect(master);
   musicBus.connect(master);
 
@@ -137,6 +155,7 @@ const ensure = (): AudioContext | null => {
 
   hitBuffers = Array.from({ length: 8 }, () => renderHit(c));
   coinBuffer = renderCoin(c);
+  void decodeDiceSample(c);
   return c;
 };
 
@@ -163,6 +182,59 @@ const playBuffer = (buffer: AudioBuffer, o: PlayOptions = {}): void => {
   node.connect(o.bus === 'music' ? musicBus : sfxBus);
   src.start(c.currentTime + (o.when ?? 0));
 };
+
+type SliceOptions = {
+  /** Через сколько секунд начать звук. */
+  when?: number;
+  /** Откуда в записи брать звук и сколько секунд записи. */
+  offset: number;
+  duration: number;
+  gain: number;
+  rate: number;
+  pan: number;
+  /** Срез частоты фильтра, Гц: чем ниже, тем глуше кубик. */
+  lowpass?: number;
+};
+
+/** Играет кусок записи удара. Без записи (ещё не декодирована) играет синтезированный удар. */
+const playSlice = (o: SliceOptions): void => {
+  const c = ctx;
+  if (!c) return;
+  const buffer = diceBuffer;
+  if (!buffer) {
+    playBuffer(pickHit(), { when: o.when, gain: Math.abs(o.gain) * 0.8, rate: o.rate, pan: o.pan });
+    return;
+  }
+  const start = c.currentTime + Math.max(0, o.when ?? 0);
+  const real = o.duration / o.rate;
+  const src = c.createBufferSource();
+  src.buffer = buffer;
+  src.playbackRate.value = o.rate;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0, start);
+  g.gain.linearRampToValueAtTime(o.gain, start + 0.002);
+  const fade = Math.min(0.03, real * 0.4);
+  g.gain.setValueAtTime(o.gain, start + real - fade);
+  g.gain.linearRampToValueAtTime(0, start + real);
+  let node: AudioNode = src;
+  if (o.lowpass) {
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = o.lowpass;
+    node.connect(lp);
+    node = lp;
+  }
+  node.connect(g);
+  const p = c.createStereoPanner();
+  p.pan.value = Math.max(-1, Math.min(1, o.pan));
+  g.connect(p).connect(sfxBus);
+  src.start(start, o.offset, o.duration);
+};
+
+/** Положение главного удара в записи, секунды. */
+const IMPACT = 0.09;
+const SAMPLE_LENGTH = 0.7;
+const between = (min: number, max: number): number => min + rand() * (max - min);
 
 const pickHit = (): AudioBuffer => hitBuffers[Math.floor(rand() * hitBuffers.length)] ?? hitBuffers[0]!;
 
@@ -410,12 +482,12 @@ const schedulerTick = (): void => {
 
 const startMusic = (): void => {
   const c = ensure();
-  if (!c || !musicOn || schedulerTimer !== null) return;
+  if (!c || musicVolume <= 0 || schedulerTimer !== null) return;
   loop ??= buildLoop();
   loopBase = c.currentTime + 0.6;
   eventIndex = 0;
   musicBus.gain.cancelScheduledValues(c.currentTime);
-  musicBus.gain.setTargetAtTime(0.6, c.currentTime, 0.3);
+  musicBus.gain.setTargetAtTime(MUSIC_GAIN * musicVolume, c.currentTime, 0.3);
   startDrone(c);
   schedulerTimer = window.setInterval(schedulerTick, 40);
 };
@@ -431,7 +503,7 @@ const stopMusic = (): void => {
 /* ---------- публичный интерфейс ---------- */
 
 const sfx = (fn: () => void): void => {
-  if (!sfxOn || !ensure()) return;
+  if (sfxVolume <= 0 || !ensure()) return;
   if (ctx?.state === 'suspended') void ctx.resume();
   fn();
 };
@@ -440,30 +512,60 @@ export const audio = {
   unlock: (): void => {
     if (!ensure()) return;
     if (ctx?.state === 'suspended') void ctx.resume();
-    if (musicOn) startMusic();
+    if (musicVolume > 0) startMusic();
   },
 
-  /** Удар кубика о стол. `delay` в секундах, `power` от 0 до 1, `pan` от -1 до 1. */
-  clack: (delay = 0, power = 1, pan = 0): void =>
-    sfx(() => playBuffer(pickHit(), { when: delay, gain: 0.25 + 0.75 * power, rate: 0.9 + rand() * 0.25, pan })),
+  /**
+   * Удар кубика о стол. `delay` — через сколько секунд кубик ударится, `kind`: 0 — первый удар (вся запись),
+   * 1 — второй подскок, 2 — последний тихий стук. `crowd` — сколько кубиков стучит одновременно, чтобы общий звук не раздувался.
+   */
+  clack: (delay = 0, kind: 0 | 1 | 2 = 0, pan = 0, crowd = 1): void =>
+    sfx(() => {
+      const trim = 1 / (1 + 0.2 * (crowd - 1));
+      const flip = rand() < 0.5 ? -1 : 1;
+      if (kind === 0) {
+        const rate = between(0.88, 1.12);
+        const skip = 0.05;
+        playSlice({
+          when: delay - (IMPACT - skip) / rate,
+          offset: skip,
+          duration: SAMPLE_LENGTH - skip,
+          gain: flip * 0.95 * trim,
+          rate,
+          pan,
+          lowpass: between(5500, 14000),
+        });
+      } else if (kind === 1) {
+        const rate = between(1.05, 1.25);
+        playSlice({ when: delay, offset: IMPACT - 0.012, duration: 0.2, gain: flip * 0.5 * trim, rate, pan, lowpass: between(4500, 9000) });
+      } else {
+        const rate = between(1.2, 1.5);
+        playSlice({ when: delay, offset: IMPACT - 0.012, duration: 0.11, gain: flip * 0.28 * trim, rate, pan, lowpass: between(4000, 7500) });
+      }
+    }),
 
-  /** Кубики гремят в руке перед броском. */
+  /** Кубики гремят в руке перед броском: россыпь коротких тихих срезов из «хвоста» записи. */
   rattle: (count = 6): void =>
     sfx(() => {
-      for (let i = 0; i < count * 2; i += 1) {
-        playBuffer(pickHit(), {
-          when: i * (0.3 / (count * 2)) + rand() * 0.012,
-          gain: 0.12 + rand() * 0.18,
-          rate: 1.25 + rand() * 0.5,
-          pan: rand() * 1.2 - 0.6,
+      const n = count * 3;
+      for (let i = 0; i < n; i += 1) {
+        playSlice({
+          when: (i / n) * 0.34 + rand() * 0.02,
+          offset: between(0.16, 0.5),
+          duration: between(0.04, 0.08),
+          gain: between(0.06, 0.16),
+          rate: between(1.1, 1.55),
+          pan: between(-0.6, 0.6),
+          lowpass: between(5000, 11000),
         });
       }
     }),
 
-  select: (): void => sfx(() => playBuffer(pickHit(), { gain: 0.35, rate: 1.55 })),
-  deselect: (): void => sfx(() => playBuffer(pickHit(), { gain: 0.22, rate: 1.3 })),
-  lock: (): void => sfx(() => playBuffer(pickHit(), { gain: 0.55, rate: 0.78 })),
-  click: (): void => sfx(() => playBuffer(pickHit(), { gain: 0.16, rate: 2 })),
+  /** Короткий стук для интерфейса. */
+  select: (): void => sfx(() => playSlice({ offset: IMPACT - 0.012, duration: 0.09, gain: 0.34, rate: 1.55, pan: 0, lowpass: 7000 })),
+  deselect: (): void => sfx(() => playSlice({ offset: IMPACT - 0.012, duration: 0.09, gain: 0.22, rate: 1.3, pan: 0, lowpass: 6000 })),
+  lock: (): void => sfx(() => playSlice({ offset: IMPACT - 0.012, duration: 0.16, gain: 0.5, rate: 0.85, pan: 0, lowpass: 5000 })),
+  click: (): void => sfx(() => playSlice({ offset: IMPACT - 0.012, duration: 0.06, gain: 0.16, rate: 2, pan: 0, lowpass: 8000 })),
   coin: (): void => sfx(() => playBuffer(coinBuffer, { gain: 0.9 })),
 
   turn: (): void => sfx(() => lute('A4', 0, 0.16, 'sfx')),
@@ -494,14 +596,23 @@ export const audio = {
       drum(0.75, 0.8);
     }),
 
-  isSfxOn: (): boolean => sfxOn,
-  isMusicOn: (): boolean => musicOn,
-  setSfx: (value: boolean): void => {
-    sfxOn = value;
+  getSfxVolume: (): number => sfxVolume,
+  getMusicVolume: (): number => musicVolume,
+
+  /** Громкость эффектов, 0–1. */
+  setSfxVolume: (value: number): void => {
+    sfxVolume = Math.max(0, Math.min(1, value));
+    if (ctx) sfxBus.gain.setTargetAtTime(sfxVolume, ctx.currentTime, 0.02);
   },
-  setMusic: (value: boolean): void => {
-    musicOn = value;
-    if (value) startMusic();
-    else stopMusic();
+
+  /** Громкость музыки, 0–1. При нуле музыка полностью останавливается. */
+  setMusicVolume: (value: number): void => {
+    musicVolume = Math.max(0, Math.min(1, value));
+    if (musicVolume <= 0) {
+      stopMusic();
+      return;
+    }
+    if (schedulerTimer !== null && ctx) musicBus.gain.setTargetAtTime(MUSIC_GAIN * musicVolume, ctx.currentTime, 0.05);
+    else startMusic();
   },
 };

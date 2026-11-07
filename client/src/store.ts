@@ -7,7 +7,6 @@ import type { DiceTable } from './dice3d.ts';
 import { createLocalSession, createOnlineSession, type Session, type SessionHandlers } from './session.ts';
 
 export type Screen = 'menu' | 'lobby' | 'game';
-export type Theme = 'dark' | 'light';
 
 export type UiState = {
   screen: Screen;
@@ -26,9 +25,9 @@ export type UiState = {
   rulesOpen: boolean;
   name: string;
   target: number;
-  theme: Theme;
-  sfx: boolean;
-  music: boolean;
+  /** Громкость эффектов и музыки, 0–100. */
+  sfxVolume: number;
+  musicVolume: number;
 };
 
 /* ---------- хранилище настроек ---------- */
@@ -50,7 +49,14 @@ const storage = {
   },
 };
 
-const initialTheme = (): Theme => (storage.get('kosti.theme') === 'light' ? 'light' : 'dark');
+/** Читает громкость 0–100. Понимает и старые значения on/off, сохранённые прежней версией. */
+const initialVolume = (key: string, fallback: number): number => {
+  const raw = storage.get(key);
+  if (raw === 'off') return 0;
+  if (raw === '' || raw === 'on') return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : fallback;
+};
 
 let state: UiState = {
   screen: 'menu',
@@ -69,9 +75,8 @@ let state: UiState = {
   rulesOpen: false,
   name: storage.get('kosti.name'),
   target: Number(storage.get('kosti.target')) || 2000,
-  theme: initialTheme(),
-  sfx: storage.get('kosti.sfx') !== 'off',
-  music: storage.get('kosti.music') !== 'off',
+  sfxVolume: initialVolume('kosti.sfx', 80),
+  musicVolume: initialVolume('kosti.music', 50),
 };
 
 const listeners = new Set<() => void>();
@@ -111,13 +116,8 @@ const showBanner = (text: string, bad = false): void => set({ banner: { id: (idC
 
 const pushLog = (line: string): void => set({ log: [...state.log, line].slice(-6) });
 
-const applyTheme = (theme: Theme): void => {
-  document.documentElement.dataset.theme = theme;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0d0c0b' : '#f5f2eb');
-};
-applyTheme(state.theme);
-audio.setSfx(state.sfx);
-audio.setMusic(state.music);
+audio.setSfxVolume(state.sfxVolume / 100);
+audio.setMusicVolume(state.musicVolume / 100);
 
 const emptyDice = (): { values: number[]; locked: boolean[] } => ({
   values: [1, 2, 3, 4, 5, 6],
@@ -306,21 +306,21 @@ export const actions = {
     actions.setTarget(value);
     return true;
   },
-  setTheme: (theme: Theme): void => {
-    storage.set('kosti.theme', theme);
-    applyTheme(theme);
-    set({ theme });
+  setSfxVolume: (percent: number): void => {
+    storage.set('kosti.sfx', String(percent));
+    audio.setSfxVolume(percent / 100);
+    set({ sfxVolume: percent });
   },
-  setSfx: (on: boolean): void => {
-    storage.set('kosti.sfx', on ? 'on' : 'off');
-    audio.setSfx(on);
-    set({ sfx: on });
-  },
-  setMusic: (on: boolean): void => {
-    storage.set('kosti.music', on ? 'on' : 'off');
+  setMusicVolume: (percent: number): void => {
+    storage.set('kosti.music', String(percent));
     audio.unlock();
-    audio.setMusic(on);
-    set({ music: on });
+    audio.setMusicVolume(percent / 100);
+    set({ musicVolume: percent });
+  },
+  /** Звук-образец при отпускании ползунка эффектов. */
+  previewSfx: (): void => {
+    audio.unlock();
+    audio.select();
   },
   setRulesOpen: (open: boolean): void => {
     if (open) audio.click();

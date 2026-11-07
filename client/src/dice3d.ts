@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { audio } from './audio.ts';
 
+/** За сколько секунд до касания стола запускается звук удара: у записи есть короткий разбег. */
+const CLACK_LEAD = 0.06;
+
 const DICE = 6;
 const HALF = 0.5;
 const FREE_Z = -0.3;
@@ -285,8 +288,12 @@ export const createDiceTable = (container: HTMLElement): DiceTable => {
       const delay = order * 0.05;
 
       const pan = die.homeX / 6;
+      const crowd = indices.length;
       [0.2, 0.6, 1].forEach((fraction, k) =>
-        window.setTimeout(() => audio.clack(0, k === 2 ? 0.4 : 0.95 - k * 0.3, pan), (delay + duration * fraction) * 1000),
+        window.setTimeout(
+          () => audio.clack(CLACK_LEAD, k === 0 ? 0 : k === 1 ? 1 : 2, pan, crowd),
+          Math.max(0, (delay + duration * fraction - CLACK_LEAD) * 1000),
+        ),
       );
 
       const spinQuat = new THREE.Quaternion();
