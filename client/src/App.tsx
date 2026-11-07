@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { createDiceTable } from './dice3d.ts';
+import { Effects } from './screens/Effects.tsx';
 import { GameScreen } from './screens/GameScreen.tsx';
 import { LobbyScreen } from './screens/LobbyScreen.tsx';
 import { MenuScreen } from './screens/MenuScreen.tsx';
@@ -68,6 +69,7 @@ export const App = () => {
       {screen === 'menu' && <MenuScreen />}
       {screen === 'lobby' && <LobbyScreen />}
       {screen === 'game' && <GameScreen />}
+      <Effects />
       <Toolbar />
       <RulesDialog />
       <OverDialog />

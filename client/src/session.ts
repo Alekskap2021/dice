@@ -1,6 +1,7 @@
 import { chooseBotAction } from '../../shared/bot.ts';
 import { applyAction, createGame, type Action, type GameEvent, type GameState } from '../../shared/engine.ts';
 import type { ClientMessage, RoomInfo, ServerMessage } from '../../shared/protocol.ts';
+import { REACTIONS, type ReactionId } from '../../shared/reactions.ts';
 
 export type SessionHandlers = {
   /** Возвращает промис, который завершается, когда анимации показаны. */
@@ -8,6 +9,8 @@ export type SessionHandlers = {
   onBotPick: (indices: number[]) => void;
   onRoom: (room: RoomInfo) => void;
   onPeerLeft: () => void;
+  /** Соперник прислал реакцию. */
+  onReaction: (seat: number, id: ReactionId) => void;
   onError: (message: string) => void;
   onClose: () => void;
 };
@@ -18,13 +21,20 @@ export type Session = {
   perform: (action: Action) => void;
   startGame: () => void;
   rematch: () => void;
+  react: (id: ReactionId) => void;
   close: () => void;
 };
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => window.setTimeout(resolve, ms));
 
-export const createLocalSession = (name: string, target: number, handlers: SessionHandlers): Session => {
-  let state = createGame([name, 'Бот'], target);
+export type GameSettings = { target: number; lastTurn: boolean };
+
+/** Ответы бота на реакции игрока. */
+const BOT_REPLIES: ReactionId[] = ['laugh', 'wow', 'dice', 'beer', 'go', 'nice', 'luck'];
+
+export const createLocalSession = (name: string, settings: GameSettings, handlers: SessionHandlers): Session => {
+  const { target, lastTurn } = settings;
+  let state = createGame([name, 'Бот'], target, lastTurn);
   let closed = false;
   let busy = false;
 
@@ -64,7 +74,7 @@ export const createLocalSession = (name: string, target: number, handlers: Sessi
   };
 
   const begin = (): void => {
-    state = createGame([name, 'Бот'], target);
+    state = createGame([name, 'Бот'], target, lastTurn);
     void handlers.onState(state, []);
   };
   queueMicrotask(begin);
@@ -76,13 +86,20 @@ export const createLocalSession = (name: string, target: number, handlers: Sessi
     rematch: () => {
       if (!closed && !busy) begin();
     },
+    react: () => {
+      if (closed || Math.random() > 0.45) return;
+      const reply = BOT_REPLIES[Math.floor(Math.random() * BOT_REPLIES.length)] ?? REACTIONS[0].id;
+      window.setTimeout(() => {
+        if (!closed) handlers.onReaction(1, reply);
+      }, 900 + Math.random() * 900);
+    },
     close: () => {
       closed = true;
     },
   };
 };
 
-export type OnlineStart = { kind: 'create'; name: string; target: number } | { kind: 'join'; name: string; code: string };
+export type OnlineStart = { kind: 'create'; name: string; target: number; lastTurn: boolean } | { kind: 'join'; name: string; code: string };
 
 export const createOnlineSession = (start: OnlineStart, handlers: SessionHandlers): Session => {
   const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -97,7 +114,7 @@ export const createOnlineSession = (start: OnlineStart, handlers: SessionHandler
   socket.addEventListener('open', () => {
     send(
       start.kind === 'create'
-        ? { t: 'create', name: start.name, target: start.target }
+        ? { t: 'create', name: start.name, target: start.target, lastTurn: start.lastTurn }
         : { t: 'join', code: start.code, name: start.name },
     );
   });
@@ -109,6 +126,8 @@ export const createOnlineSession = (start: OnlineStart, handlers: SessionHandler
       handlers.onRoom(message.room);
     } else if (message.t === 'state') {
       void handlers.onState(message.state, message.events);
+    } else if (message.t === 'react') {
+      handlers.onReaction(message.seat, message.id);
     } else if (message.t === 'peer_left') {
       handlers.onPeerLeft();
     } else {
@@ -128,6 +147,7 @@ export const createOnlineSession = (start: OnlineStart, handlers: SessionHandler
     perform: (action) => send({ t: 'action', action }),
     startGame: () => send({ t: 'start' }),
     rematch: () => send({ t: 'rematch' }),
+    react: (id) => send({ t: 'react', id }),
     close: () => {
       closed = true;
       send({ t: 'leave' });

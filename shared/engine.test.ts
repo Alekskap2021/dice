@@ -108,3 +108,70 @@ test('бот всегда делает допустимый ход и доигр
     assert.equal(state.phase, 'over');
   }
 });
+
+const playTurn = (state: GameState, rolls: number[], keep: number[], then: 'roll' | 'bank') => {
+  const rolled = applyAction(state, { type: 'roll' }, sequence(rolls));
+  assert.ok(rolled.ok);
+  if (rolled.state.phase !== 'choose') return rolled;
+  const kept = applyAction(rolled.state, { type: 'keep', indices: keep, then }, Math.random);
+  assert.ok(kept.ok);
+  return kept;
+};
+
+test('последний ход: набравший цель не побеждает сразу, соперник доигрывает', () => {
+  let state = createGame(['A', 'B'], 100, true);
+  let turn = playTurn(state, [1, 2, 3, 4, 6, 6], [0], 'bank');
+  assert.equal(turn.state.phase, 'roll');
+  assert.equal(turn.state.finalFrom, 0);
+  assert.equal(turn.state.current, 1);
+  assert.ok(turn.events.some((event) => event.type === 'lastturn'));
+  state = turn.state;
+  // B набирает 50 и забирает: меньше, чем у A, ход вернулся к A, значит игра окончена
+  turn = playTurn(state, [5, 2, 3, 4, 6, 6], [0], 'bank');
+  assert.equal(turn.state.phase, 'over');
+  assert.equal(turn.state.winner, 0);
+});
+
+test('последний ход: соперник может обогнать', () => {
+  const state = createGame(['A', 'B'], 100, true);
+  let turn = playTurn(state, [1, 2, 3, 4, 6, 6], [0], 'bank');
+  turn = playTurn(turn.state, [1, 1, 2, 3, 4, 6], [0, 1], 'bank');
+  assert.equal(turn.state.phase, 'over');
+  assert.equal(turn.state.winner, 1);
+});
+
+test('последний ход: болт в последнем круге отдаёт победу', () => {
+  const state = createGame(['A', 'B'], 100, true);
+  let turn = playTurn(state, [1, 2, 3, 4, 6, 6], [0], 'bank');
+  turn = playTurn(turn.state, [2, 3, 4, 6, 6, 2], [], 'bank');
+  assert.equal(turn.state.phase, 'over');
+  assert.equal(turn.state.winner, 0);
+});
+
+test('последний ход: ничья даёт ещё один круг', () => {
+  const state = createGame(['A', 'B'], 100, true);
+  let turn = playTurn(state, [1, 2, 3, 4, 6, 6], [0], 'bank');
+  turn = playTurn(turn.state, [1, 2, 3, 4, 6, 6], [0], 'bank');
+  assert.equal(turn.state.phase, 'roll');
+  assert.equal(turn.state.finalFrom, null);
+  assert.ok(turn.events.some((event) => event.type === 'tie'));
+});
+
+test('без правила последнего хода победа сразу', () => {
+  const state = createGame(['A', 'B'], 100, false);
+  const turn = playTurn(state, [1, 2, 3, 4, 6, 6], [0], 'bank');
+  assert.equal(turn.state.phase, 'over');
+});
+
+test('боты доигрывают партию с правилом последнего хода', () => {
+  for (let game = 0; game < 40; game += 1) {
+    let state = createGame(['Бот 1', 'Бот 2'], 1500, true);
+    for (let step = 0; step < 4000 && state.phase !== 'over'; step += 1) {
+      const result = applyAction(state, chooseBotAction(state), Math.random);
+      assert.ok(result.ok);
+      state = result.state;
+    }
+    assert.equal(state.phase, 'over');
+    assert.notEqual(state.winner, null);
+  }
+});

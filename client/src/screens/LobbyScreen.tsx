@@ -44,7 +44,7 @@ export const LobbyScreen = () => {
           {room.names.length < 2 && <li className="waiting">Ждём друга…</li>}
         </ul>
         <p className="hint">
-          Играем до <b>{room.target}</b> очков
+          Играем до <b>{room.target}</b> очков{room.lastTurn ? ', с правилом «последний ход»' : ''}
         </p>
 
         <div className="stack">

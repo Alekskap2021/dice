@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, ChipGroup, Input } from '../ui/index.ts';
+import { Button, ChipGroup, Input, Switch } from '../ui/index.ts';
 import { actions, useStore } from '../store.ts';
 
 const TARGETS = [1000, 2000, 3000, 4000, 5000];
@@ -11,6 +11,7 @@ export const MenuScreen = () => {
   const name = useStore((s) => s.name);
   const target = useStore((s) => s.target);
   const error = useStore((s) => s.menuError);
+  const lastTurn = useStore((s) => s.lastTurn);
   const [code, setCode] = useState(() => new URLSearchParams(location.search).get('room')?.toUpperCase().slice(0, 4) ?? '');
   const [custom, setCustom] = useState('');
 
@@ -61,6 +62,11 @@ export const MenuScreen = () => {
             }}
             aria-label="Своё число очков"
           />
+        </div>
+
+        <div className="field">
+          <Switch label="Последний ход" checked={lastTurn} onChange={actions.setLastTurn} />
+          <p className="hint hint-left">Набравший цель не побеждает сразу: соперник доигрывает свой ход, и выигрывает тот, у кого больше очков.</p>
         </div>
 
         <div className="stack">

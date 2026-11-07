@@ -173,6 +173,86 @@ h1, h2, h3, p { margin: 0; }
   100% { opacity: 0; transform: translateY(-22px) scale(1.04); }
 }
 
+
+.hint-left { text-align: left; font-size: 13px; }
+.tag-goal { color: var(--accent); background: var(--accent-soft); }
+.turn-badge[data-final] { border-color: var(--accent); }
+.score-card { position: relative; }
+
+/* ---------- реакции ---------- */
+.react-fab { position: absolute; right: 14px; bottom: 150px; pointer-events: auto; }
+.react-fab .ui-button[data-size='icon'] { background: color-mix(in srgb, var(--surface) 82%, transparent); backdrop-filter: blur(8px); font-size: 18px; }
+.react-emoji { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.react-btn {
+  height: 48px; font-size: 26px; line-height: 1; cursor: pointer;
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md);
+  transition: transform 0.12s var(--ease), border-color 0.15s;
+}
+.react-btn:hover { border-color: var(--accent); transform: scale(1.06); }
+.react-btn:active { transform: scale(0.94); }
+.react-phrases { display: flex; flex-wrap: wrap; gap: 6px; }
+.react-phrase {
+  padding: 7px 12px; font: 500 14px var(--font-ui); color: var(--text); cursor: pointer;
+  background: transparent; border: 1px solid var(--border-strong); border-radius: 999px;
+  transition: background 0.15s, border-color 0.15s;
+}
+.react-phrase:hover { background: var(--accent-soft); border-color: var(--accent); }
+.react-btn:focus-visible, .react-phrase:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.reaction-bubble {
+  position: absolute; left: 160px; top: calc(100% + 8px); z-index: 6;
+  padding: 8px 14px; font: 600 15px var(--font-ui); white-space: nowrap;
+  color: var(--text); background: var(--surface-2);
+  border: 1px solid var(--border-strong); border-radius: 18px 18px 18px 4px;
+  box-shadow: var(--shadow);
+  animation: bubble 3.2s var(--ease) both;
+}
+.reaction-bubble::before {
+  content: ''; position: absolute; left: 14px; top: -6px; width: 10px; height: 10px;
+  background: inherit; border-left: 1px solid var(--border-strong); border-top: 1px solid var(--border-strong);
+  transform: rotate(45deg);
+}
+.reaction-bubble[data-emoji] { padding: 4px 12px; font-size: 34px; line-height: 1.2; }
+@keyframes bubble {
+  0% { opacity: 0; transform: translateY(-8px) scale(0.7); }
+  8% { opacity: 1; transform: scale(1.08); }
+  14% { transform: scale(1); }
+  86% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(6px); }
+}
+
+/* ---------- экранные эффекты ---------- */
+.fx { position: fixed; inset: 0; z-index: 12; pointer-events: none; overflow: hidden; }
+.fx-flash { position: absolute; inset: 0; opacity: 0; animation: flash 0.9s ease-out both; }
+.fx[data-kind='hot'] .fx-flash { background: radial-gradient(ellipse at center, rgba(255, 205, 90, 0.5), transparent 70%); }
+.fx[data-kind='bust'] .fx-flash { background: radial-gradient(ellipse at center, transparent 30%, rgba(214, 48, 28, 0.55) 100%); animation-duration: 0.8s; }
+@keyframes flash { 0% { opacity: 0; } 12% { opacity: 1; } 100% { opacity: 0; } }
+.fx-coins { position: absolute; left: 50%; top: 56%; }
+.fx-coin {
+  position: absolute; left: 0; top: 0; width: var(--size); height: var(--size);
+  margin: calc(var(--size) / -2);
+  opacity: 0;
+  animation: coin-x var(--dur) linear var(--delay) both;
+}
+.fx-coin-face {
+  display: block; width: 100%; height: 100%; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff1b8, #e0ac47 55%, #9a6a14);
+  box-shadow: inset 0 0 0 2px rgba(120, 78, 10, 0.55), 0 2px 6px rgba(0, 0, 0, 0.45);
+  animation: coin-y var(--dur) cubic-bezier(0.25, 0.6, 0.4, 1) var(--delay) both, coin-spin 0.5s linear var(--delay) infinite;
+}
+@keyframes coin-x { 0% { opacity: 1; transform: translateX(0); } 85% { opacity: 1; } 100% { opacity: 0; transform: translateX(var(--dx)); } }
+@keyframes coin-y {
+  0% { transform: translateY(0) rotate(0deg); animation-timing-function: cubic-bezier(0.2, 0.7, 0.4, 1); }
+  38% { transform: translateY(var(--rise)) rotate(calc(var(--rot) * 0.4)); animation-timing-function: cubic-bezier(0.55, 0, 0.9, 0.6); }
+  100% { transform: translateY(var(--fall)) rotate(var(--rot)); }
+}
+@keyframes coin-spin { from { scale: 1 1; } 50% { scale: 0.15 1; } to { scale: 1 1; } }
+body.fx-shake .hud, body.fx-shake .toolbar { animation: ui-shake 0.52s linear both; }
+@keyframes ui-shake {
+  0%, 100% { transform: none; }
+  10% { transform: translate(-7px, 3px); } 20% { transform: translate(6px, -4px); } 30% { transform: translate(-5px, -3px); }
+  40% { transform: translate(5px, 4px); } 55% { transform: translate(-3px, 2px); } 70% { transform: translate(3px, -2px); } 85% { transform: translate(-1px, 1px); }
+}
+
 /* ---------- узкие экраны ---------- */
 @media (max-width: 720px) {
   .title { font-size: 46px; }
@@ -183,10 +263,12 @@ h1, h2, h3, p { margin: 0; }
   .score-goal { font-size: 12px; }
   .pill { font-size: 12px; padding: 3px 8px; }
   .score-foot { flex-wrap: wrap; row-gap: 4px; }
-  .turn-badge { top: 192px; left: 14px; }
   .log { display: none; }
   .control-buttons .ui-button { flex: 1 1 100%; }
   .toast { bottom: 190px; }
+  .react-fab { bottom: 196px; }
+  .reaction-bubble { left: 8px; }
+  .turn-badge { top: 240px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

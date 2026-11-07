@@ -1,5 +1,6 @@
 import { Button, Kbd, ProgressBar } from '../ui/index.ts';
 import { actions, isMyTurn, selectionPoints, useStore } from '../store.ts';
+import { ReactionBubble, ReactionPicker } from './Reactions.tsx';
 
 const Scoreboard = () => {
   const shown = useStore((s) => s.shown);
@@ -17,6 +18,7 @@ const Scoreboard = () => {
               <span className="score-name">
                 {player.name}
                 {index === seat && <span className="tag">вы</span>}
+                {shown.finalFrom === index && <span className="tag tag-goal">цель набрана</span>}
               </span>
               <span className="score-points">{player.score}</span>
             </header>
@@ -36,6 +38,7 @@ const Scoreboard = () => {
                 )}
               </span>
             </footer>
+            <ReactionBubble seat={index} />
           </article>
         );
       })}
@@ -48,9 +51,12 @@ const TurnBadge = () => {
   const mine = useStore(isMyTurn);
   if (!shown || shown.phase === 'over') return null;
   const name = shown.players[shown.current]?.name ?? '';
+  const final = shown.finalFrom !== null;
+  let text = mine ? 'Ваш ход' : `Ход: ${name}`;
+  if (final) text = mine ? 'Ваш последний ход' : `Последний ход: ${name}`;
   return (
-    <div key={`${shown.current}`} className="turn-badge" data-mine={mine ? '' : undefined}>
-      {mine ? 'Ваш ход' : `Ход: ${name}`}
+    <div key={`${shown.current}${final}`} className="turn-badge" data-mine={mine ? '' : undefined} data-final={final ? '' : undefined}>
+      {text}
     </div>
   );
 };
@@ -140,5 +146,6 @@ export const GameScreen = () => (
     <Log />
     <Banner />
     <Controls />
+    <ReactionPicker />
   </section>
 );

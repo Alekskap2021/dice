@@ -5,12 +5,14 @@ import { fileURLToPath } from 'node:url';
 import { WebSocket, WebSocketServer } from 'ws';
 import { applyAction, createGame, MAX_TARGET, MIN_TARGET, type GameState } from '../shared/engine.ts';
 import type { ClientMessage, RoomInfo, ServerMessage } from '../shared/protocol.ts';
+import { isReactionId } from '../shared/reactions.ts';
 
-type Seat = { socket: WebSocket; name: string; wantsRematch: boolean };
+type Seat = { socket: WebSocket; name: string; wantsRematch: boolean; lastReactionAt: number };
 
 type Room = {
   code: string;
   target: number;
+  lastTurn: boolean;
   seats: Seat[];
   state: GameState | null;
 };
@@ -47,6 +49,7 @@ const cleanName = (name: string, fallback: string): string => name.replace(/\s+/
 const roomInfo = (room: Room, you: number): RoomInfo => ({
   code: room.code,
   target: room.target,
+  lastTurn: room.lastTurn,
   names: room.seats.map((seat) => seat.name),
   you,
   started: room.state !== null,
@@ -76,7 +79,7 @@ const leaveRoom = (socket: WebSocket): void => {
 };
 
 const startGame = (room: Room): void => {
-  room.state = createGame(room.seats.map((seat) => seat.name), room.target);
+  room.state = createGame(room.seats.map((seat) => seat.name), room.target, room.lastTurn);
   room.seats.forEach((seat) => (seat.wantsRematch = false));
   broadcastRoom(room);
   room.seats.forEach((seat) => send(seat.socket, { t: 'state', state: room.state as GameState, events: [] }));
@@ -86,8 +89,8 @@ const handleMessage = (socket: WebSocket, message: ClientMessage): void => {
   if (message.t === 'create') {
     leaveRoom(socket);
     const target = Math.min(MAX_TARGET, Math.max(MIN_TARGET, Math.round(Number(message.target) || 2000)));
-    const room: Room = { code: makeCode(), target, seats: [], state: null };
-    room.seats.push({ socket, name: cleanName(message.name, 'Игрок 1'), wantsRematch: false });
+    const room: Room = { code: makeCode(), target, lastTurn: message.lastTurn === true, seats: [], state: null };
+    room.seats.push({ socket, name: cleanName(message.name, 'Игрок 1'), wantsRematch: false, lastReactionAt: 0 });
     rooms.set(room.code, room);
     roomOf.set(socket, room);
     broadcastRoom(room);
@@ -102,7 +105,7 @@ const handleMessage = (socket: WebSocket, message: ClientMessage): void => {
     const fallback = 'Игрок 2';
     let name = cleanName(message.name, fallback);
     if (room.seats.some((seat) => seat.name === name)) name = `${name} (2)`;
-    room.seats.push({ socket, name, wantsRematch: false });
+    room.seats.push({ socket, name, wantsRematch: false, lastReactionAt: 0 });
     roomOf.set(socket, room);
     broadcastRoom(room);
     return;
@@ -118,6 +121,17 @@ const handleMessage = (socket: WebSocket, message: ClientMessage): void => {
     if (index !== 0) return send(socket, { t: 'error', message: 'Начать игру может только создатель комнаты.' });
     if (room.seats.length < 2) return send(socket, { t: 'error', message: 'Ждём второго игрока.' });
     return startGame(room);
+  }
+
+  if (message.t === 'react') {
+    const seat = room.seats[index];
+    const now = Date.now();
+    if (!seat || !isReactionId(message.id) || now - seat.lastReactionAt < 700) return;
+    seat.lastReactionAt = now;
+    room.seats.forEach((other, otherIndex) => {
+      if (otherIndex !== index) send(other.socket, { t: 'react', seat: index, id: message.id });
+    });
+    return;
   }
 
   if (message.t === 'rematch') {

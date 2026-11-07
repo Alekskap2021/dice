@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { MAX_TARGET, MIN_TARGET, type Action, type GameEvent, type GameState } from '../../shared/engine.ts';
 import type { RoomInfo } from '../../shared/protocol.ts';
+import { type ReactionId } from '../../shared/reactions.ts';
 import { scoreSelection } from '../../shared/rules.ts';
 import { audio } from './audio.ts';
 import type { DiceTable } from './dice3d.ts';
@@ -28,6 +29,14 @@ export type UiState = {
   /** Громкость эффектов и музыки, 0–100. */
   sfxVolume: number;
   musicVolume: number;
+  /** Правило «последний ход» для новых игр. */
+  lastTurn: boolean;
+  /** Тряска, замедление и монеты. */
+  effects: boolean;
+  /** Реакция, показанная у карточки игрока (ключ — номер игрока в партии). */
+  reactions: Record<number, { id: number; reaction: ReactionId } | undefined>;
+  /** Всплеск эффекта на экране; `id` меняется при каждом срабатывании. */
+  fx: { id: number; kind: 'hot' | 'bust' } | null;
 };
 
 /* ---------- хранилище настроек ---------- */
@@ -58,6 +67,13 @@ const initialVolume = (key: string, fallback: number): number => {
   return Number.isFinite(value) ? Math.max(0, Math.min(100, Math.round(value))) : fallback;
 };
 
+const initialEffects = (): boolean => {
+  const saved = storage.get('kosti.fx');
+  if (saved === 'on') return true;
+  if (saved === 'off') return false;
+  return !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+};
+
 let state: UiState = {
   screen: 'menu',
   mode: null,
@@ -77,6 +93,10 @@ let state: UiState = {
   target: Number(storage.get('kosti.target')) || 2000,
   sfxVolume: initialVolume('kosti.sfx', 80),
   musicVolume: initialVolume('kosti.music', 50),
+  lastTurn: storage.get('kosti.lastTurn') === 'on',
+  effects: initialEffects(),
+  reactions: {},
+  fx: null,
 };
 
 const listeners = new Set<() => void>();
@@ -114,6 +134,28 @@ const showToast = (text: string, ms = 3200): void => {
 
 const showBanner = (text: string, bad = false): void => set({ banner: { id: (idCounter += 1), text, bad } });
 
+const reactionTimers = new Map<number, number>();
+let lastSentReaction = 0;
+
+const showReaction = (seat: number, reaction: ReactionId): void => {
+  window.clearTimeout(reactionTimers.get(seat));
+  set({ reactions: { ...state.reactions, [seat]: { id: (idCounter += 1), reaction } } });
+  reactionTimers.set(
+    seat,
+    window.setTimeout(() => set({ reactions: { ...state.reactions, [seat]: undefined } }), 3200),
+  );
+};
+
+let fxTimer: number | undefined;
+/** Запускает экранный эффект, если эффекты включены. */
+const triggerFx = (kind: 'hot' | 'bust'): void => {
+  if (!state.effects) return;
+  window.clearTimeout(fxTimer);
+  set({ fx: { id: (idCounter += 1), kind } });
+  fxTimer = window.setTimeout(() => set({ fx: null }), 1800);
+  if (kind === 'bust') table?.shakeCamera(0.22, 520);
+};
+
 const pushLog = (line: string): void => set({ log: [...state.log, line].slice(-6) });
 
 audio.setSfxVolume(state.sfxVolume / 100);
@@ -147,6 +189,8 @@ const playEvents = async (game: GameState, events: GameEvent[]): Promise<void> =
     } else if (event.type === 'rolled') {
       if (event.hot) {
         audio.hot();
+        triggerFx('hot');
+        if (state.effects) table?.slowMo(0.4, 650);
         showBanner('Горячие кости!');
         pushLog('Горячие кости!');
         await sleep(450);
@@ -158,6 +202,7 @@ const playEvents = async (game: GameState, events: GameEvent[]): Promise<void> =
       await sleep(250);
     } else if (event.type === 'bust') {
       audio.bust();
+      triggerFx('bust');
       showBanner('Болт!', true);
       pushLog(`${nameOf(game, event.player)}: болт, очки хода сгорели`);
       await table?.shake();
@@ -170,6 +215,14 @@ const playEvents = async (game: GameState, events: GameEvent[]): Promise<void> =
       set({ shown: { ...game, current: state.shown?.current ?? game.current } });
       await sleep(550);
       await table?.gather();
+    } else if (event.type === 'lastturn') {
+      showBanner('Последний ход!');
+      pushLog(`${nameOf(game, event.player)} набрал цель. Остальные доигрывают круг`);
+      await sleep(900);
+    } else if (event.type === 'tie') {
+      showBanner('Ничья: ещё круг');
+      pushLog('Ничья, играем ещё круг');
+      await sleep(900);
     } else if (event.type === 'win') {
       if (event.player === mySeat()) audio.win();
       else audio.lose();
@@ -237,6 +290,10 @@ const handlers = (): SessionHandlers => ({
     set({ screen: 'lobby' });
   },
   onPeerLeft: () => showToast('Соперник покинул комнату.'),
+  onReaction: (seat, reaction) => {
+    audio.click();
+    showReaction(seat, reaction);
+  },
   onError: (message) => {
     set({ busy: false, selected: [] });
     table?.setSelected(new Set());
@@ -255,7 +312,7 @@ const resetGameView = (): void => {
   table?.setSelected(new Set());
   const { values, locked } = emptyDice();
   table?.reset(values, locked);
-  set({ shown: null, selected: [], busy: false, log: [], gameOver: false, rematchWaiting: false, banner: null });
+  set({ shown: null, selected: [], busy: false, log: [], gameOver: false, rematchWaiting: false, banner: null, reactions: {}, fx: null });
 };
 
 const playerName = (): string => {
@@ -317,6 +374,23 @@ export const actions = {
     audio.setMusicVolume(percent / 100);
     set({ musicVolume: percent });
   },
+  setLastTurn: (on: boolean): void => {
+    storage.set('kosti.lastTurn', on ? 'on' : 'off');
+    set({ lastTurn: on });
+  },
+  setEffects: (on: boolean): void => {
+    storage.set('kosti.fx', on ? 'on' : 'off');
+    set({ effects: on });
+  },
+  /** Отправить реакцию: показывается у моей карточки сразу, сопернику уходит по сети. */
+  react: (reaction: ReactionId): void => {
+    const now = Date.now();
+    if (!session || state.screen !== 'game' || now - lastSentReaction < 900) return;
+    lastSentReaction = now;
+    audio.unlock();
+    showReaction(mySeat(), reaction);
+    session.react(reaction);
+  },
   /** Звук-образец при отпускании ползунка эффектов. */
   previewSfx: (): void => {
     audio.unlock();
@@ -335,7 +409,7 @@ export const actions = {
     session?.close();
     resetGameView();
     set({ menuError: '', mode: 'bot', screen: 'game' });
-    session = createLocalSession(playerName(), state.target, handlers());
+    session = createLocalSession(playerName(), { target: state.target, lastTurn: state.lastTurn }, handlers());
   },
 
   startOnline: (kind: 'create' | 'join', code = ''): void => {
@@ -346,7 +420,7 @@ export const actions = {
     set({ menuError: '', lobbyError: '', mode: 'online' });
     const name = playerName();
     session = createOnlineSession(
-      kind === 'create' ? { kind, name, target: state.target } : { kind, name, code },
+      kind === 'create' ? { kind, name, target: state.target, lastTurn: state.lastTurn } : { kind, name, code },
       handlers(),
     );
   },
@@ -412,6 +486,7 @@ export const exposeForTests = (): void => {
       state: () => state.shown,
       busy: () => state.busy,
       ui: () => state,
+      fx: triggerFx,
     },
   });
 };

@@ -30,7 +30,15 @@ export const chooseBotAction = (state: GameState): Action => {
   const me = state.players[state.current];
   const wins = me !== undefined && me.score + turnScore >= state.target;
 
-  if (wins) return { type: 'keep', indices: best.indices, then: 'bank' };
+  if (wins && state.finalFrom === null) return { type: 'keep', indices: best.indices, then: 'bank' };
+
+  // Последний круг: бот должен обогнать лидера, иначе остановка ничего не даст.
+  if (state.finalFrom !== null && me !== undefined) {
+    const leader = Math.max(...state.players.filter((_, index) => index !== state.current).map((player) => player.score));
+    const ahead = me.score + turnScore > leader;
+    if (ahead) return { type: 'keep', indices: best.indices, then: 'bank' };
+    return { type: 'keep', indices: best.indices, then: 'roll' };
+  }
   if (diceLeft === 0) return { type: 'keep', indices: best.indices, then: 'roll' };
 
   // Чем меньше кубиков осталось, тем выше шанс болта, тем раньше стоит остановиться.

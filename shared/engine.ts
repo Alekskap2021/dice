@@ -12,6 +12,10 @@ export type GameState = {
   dice: Die[];
   phase: Phase;
   winner: number | null;
+  /** Правило «последний ход»: набравший цель не побеждает сразу, остальные доигрывают круг. */
+  lastTurn: boolean;
+  /** Кто набрал цель и запустил последний круг. Игра закончится, когда ход вернётся к нему. */
+  finalFrom: number | null;
 };
 
 export type Action =
@@ -23,6 +27,8 @@ export type GameEvent =
   | { type: 'kept'; indices: number[]; points: number }
   | { type: 'bust'; player: number }
   | { type: 'banked'; player: number; points: number }
+  | { type: 'lastturn'; player: number }
+  | { type: 'tie' }
   | { type: 'win'; player: number };
 
 export type Rng = () => number;
@@ -32,7 +38,7 @@ export type ApplyResult = { ok: true; state: GameState; events: GameEvent[] } | 
 export const MIN_TARGET = 500;
 export const MAX_TARGET = 20000;
 
-export const createGame = (names: string[], target: number): GameState => ({
+export const createGame = (names: string[], target: number, lastTurn = false): GameState => ({
   target,
   players: names.map((name) => ({ name, score: 0 })),
   current: 0,
@@ -40,6 +46,8 @@ export const createGame = (names: string[], target: number): GameState => ({
   dice: Array.from({ length: DICE_COUNT }, () => ({ value: 1, locked: false })),
   phase: 'roll',
   winner: null,
+  lastTurn,
+  finalFrom: null,
 });
 
 const randomDie = (rng: Rng): number => 1 + Math.floor(rng() * 6);
@@ -57,6 +65,33 @@ const nextTurn = (state: GameState): void => {
   for (const die of state.dice) die.locked = false;
 };
 
+/** Подводит итог последнего круга: побеждает лучший счёт, при равенстве играем ещё круг. */
+const finishFinalRound = (state: GameState, events: GameEvent[]): void => {
+  const best = Math.max(...state.players.map((player) => player.score));
+  const leaders = state.players.flatMap((player, index) => (player.score === best ? [index] : []));
+  if (leaders.length > 1) {
+    state.finalFrom = null;
+    events.push({ type: 'tie' });
+    nextTurn(state);
+    return;
+  }
+  const winner = leaders[0] ?? 0;
+  state.phase = 'over';
+  state.winner = winner;
+  state.turnScore = 0;
+  events.push({ type: 'win', player: winner });
+};
+
+/** Конец хода (забрал очки или болт): передаёт ход или завершает последний круг. */
+const endTurn = (state: GameState, events: GameEvent[]): void => {
+  const next = (state.current + 1) % state.players.length;
+  if (state.finalFrom !== null && next === state.finalFrom) {
+    finishFinalRound(state, events);
+    return;
+  }
+  nextTurn(state);
+};
+
 /** Бросает все незафиксированные кубики. Если ни одной комбинации — болт, ход переходит. */
 const rollFreeDice = (state: GameState, rng: Rng, events: GameEvent[], hot: boolean): void => {
   const indices: number[] = [];
@@ -72,7 +107,7 @@ const rollFreeDice = (state: GameState, rng: Rng, events: GameEvent[], hot: bool
     return;
   }
   events.push({ type: 'bust', player: state.current });
-  nextTurn(state);
+  endTurn(state, events);
 };
 
 export const freeIndices = (state: GameState): number[] =>
@@ -111,14 +146,18 @@ export const applyAction = (previous: GameState, action: Action, rng: Rng): Appl
     if (!player) return { ok: false, error: 'Нет игрока' };
     player.score += state.turnScore;
     events.push({ type: 'banked', player: state.current, points: state.turnScore });
-    if (player.score >= state.target) {
+    if (player.score >= state.target && !state.lastTurn) {
       state.phase = 'over';
       state.winner = state.current;
       state.turnScore = 0;
       events.push({ type: 'win', player: state.current });
       return { ok: true, state, events };
     }
-    nextTurn(state);
+    if (player.score >= state.target && state.finalFrom === null) {
+      state.finalFrom = state.current;
+      events.push({ type: 'lastturn', player: state.current });
+    }
+    endTurn(state, events);
     return { ok: true, state, events };
   }
 

@@ -138,6 +138,10 @@ export type DiceTable = {
   gather: () => Promise<void>;
   /** Встряска при болте. */
   shake: () => Promise<void>;
+  /** Замедляет время на сцене: `scale` от 0 до 1 на `ms` миллисекунд, затем плавно возвращает. */
+  slowMo: (scale: number, ms: number) => void;
+  /** Трясёт камеру: `amount` — размах в единицах сцены. */
+  shakeCamera: (amount: number, ms: number) => void;
   setSelected: (selected: ReadonlySet<number>) => void;
   setPickable: (indices: ReadonlySet<number>, cb: (index: number) => void) => void;
   dispose: () => void;
@@ -155,6 +159,7 @@ export const createDiceTable = (container: HTMLElement): DiceTable => {
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x120b06, 14, 30);
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 60);
+  const camBase = new THREE.Vector3();
 
   scene.add(new THREE.HemisphereLight(0xffe2b0, 0x2a170c, 0.55));
   const key = new THREE.DirectionalLight(0xffd9a0, 1.4);
@@ -240,17 +245,29 @@ export const createDiceTable = (container: HTMLElement): DiceTable => {
       scene.fog.near = distance * 0.9;
       scene.fog.far = distance * 2.2;
     }
-    camera.position.set(0, distance * 0.78, 1.3 + distance * 0.66);
+    camBase.set(0, distance * 0.78, 1.3 + distance * 0.66);
+    camera.position.copy(camBase);
     camera.lookAt(0, 0, 1.3);
     camera.updateProjectionMatrix();
   };
+  // Собственные часы сцены: умеют замедляться. Все анимации и звуки бросков идут по ним.
+  let clock = 0;
+  let timeScale = 1;
+  let slowUntil = 0;
+  const SLOW_EASE_MS = 250;
+  let cameraShake: { amount: number; start: number; ms: number } | null = null;
+  const timers: { at: number; run: () => void }[] = [];
+  const schedule = (seconds: number, run: () => void): void => {
+    timers.push({ at: clock + seconds * 1000, run });
+  };
+
   const observer = new ResizeObserver(resize);
   observer.observe(container);
   resize();
 
   const runAnimation = (die: Die, update: (progress: number) => void, duration: number, delay = 0): Promise<void> =>
     new Promise((resolve) => {
-      const start = performance.now() + delay * 1000;
+      const start = clock + delay * 1000;
       die.anim = {
         update: (now) => {
           if (now < start) return true;
@@ -290,9 +307,8 @@ export const createDiceTable = (container: HTMLElement): DiceTable => {
       const pan = die.homeX / 6;
       const crowd = indices.length;
       [0.2, 0.6, 1].forEach((fraction, k) =>
-        window.setTimeout(
-          () => audio.clack(CLACK_LEAD, k === 0 ? 0 : k === 1 ? 1 : 2, pan, crowd),
-          Math.max(0, (delay + duration * fraction - CLACK_LEAD) * 1000),
+        schedule(Math.max(0, delay + duration * fraction - CLACK_LEAD), () =>
+          audio.clack(CLACK_LEAD, k === 0 ? 0 : k === 1 ? 1 : 2, pan, crowd),
         ),
       );
 
@@ -345,7 +361,7 @@ export const createDiceTable = (container: HTMLElement): DiceTable => {
       die.locked = true;
       die.selected = false;
       for (const m of die.materials) m.emissiveIntensity = 0;
-      window.setTimeout(() => audio.lock(), 300 + order * 70);
+      schedule(0.3 + order * 0.07, () => audio.lock());
       return moveTo(die, restPosition(die), 0.38, 0.9, order * 0.07);
     });
     await Promise.all(jobs);
@@ -427,10 +443,44 @@ export const createDiceTable = (container: HTMLElement): DiceTable => {
   renderer.domElement.addEventListener('pointerdown', handleClick);
   renderer.domElement.addEventListener('pointermove', handleMove);
 
+  const slowMo = (scale: number, ms: number): void => {
+    timeScale = scale;
+    slowUntil = performance.now() + ms;
+  };
+  const shakeCamera = (amount: number, ms: number): void => {
+    cameraShake = { amount, start: performance.now(), ms };
+  };
+
   let frame = 0;
+  let lastFrame = 0;
   const loop = (now: number): void => {
     frame = requestAnimationFrame(loop);
-    for (const die of dice) die.anim?.update(now);
+    const dt = lastFrame === 0 ? 16 : Math.min(100, now - lastFrame);
+    lastFrame = now;
+    if (timeScale < 1) {
+      const over = now - slowUntil;
+      timeScale = over <= 0 ? timeScale : Math.min(1, timeScale + (1 - timeScale) * Math.min(1, over / SLOW_EASE_MS));
+      if (over > SLOW_EASE_MS) timeScale = 1;
+    }
+    clock += dt * timeScale;
+    for (let i = timers.length - 1; i >= 0; i -= 1) {
+      const timer = timers[i];
+      if (timer && timer.at <= clock) {
+        timers.splice(i, 1);
+        timer.run();
+      }
+    }
+    for (const die of dice) die.anim?.update(clock);
+    if (cameraShake) {
+      const progress = (now - cameraShake.start) / cameraShake.ms;
+      if (progress >= 1) {
+        cameraShake = null;
+        camera.position.copy(camBase);
+      } else {
+        const amp = cameraShake.amount * (1 - progress) ** 2;
+        camera.position.set(camBase.x + (Math.random() - 0.5) * amp * 2, camBase.y + (Math.random() - 0.5) * amp, camBase.z);
+      }
+    }
     candle.intensity = 22 + Math.sin(now * 0.011) * 2 + Math.sin(now * 0.027) * 1.5;
     renderer.render(scene, camera);
   };
@@ -442,6 +492,8 @@ export const createDiceTable = (container: HTMLElement): DiceTable => {
     lockDice,
     gather,
     shake,
+    slowMo,
+    shakeCamera,
     setSelected,
     setPickable: (indices, cb) => {
       pickable = indices;
