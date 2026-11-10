@@ -96,19 +96,3 @@ export const hasAnyScoring = (values: readonly number[]): boolean => {
   if ((counts[1] ?? 0) > 0 || (counts[5] ?? 0) > 0) return true;
   return counts.some((count) => count >= 3);
 };
-
-/** Для таблицы правил в интерфейсе. */
-export const RULES_TABLE: readonly { combo: string; points: string }[] = [
-  { combo: 'Одна единица', points: String(SCORING.singleOne) },
-  { combo: 'Одна пятёрка', points: String(SCORING.singleFive) },
-  { combo: 'Три единицы', points: String(SCORING.threeOfKind[1]) },
-  { combo: 'Три двойки', points: String(SCORING.threeOfKind[2]) },
-  { combo: 'Три тройки', points: String(SCORING.threeOfKind[3]) },
-  { combo: 'Три четвёрки', points: String(SCORING.threeOfKind[4]) },
-  { combo: 'Три пятёрки', points: String(SCORING.threeOfKind[5]) },
-  { combo: 'Три шестёрки', points: String(SCORING.threeOfKind[6]) },
-  { combo: 'Четыре, пять, шесть одинаковых', points: 'очки тройки ×2 за каждый лишний кубик' },
-  { combo: 'Стрит 1–5', points: String(SCORING.straight1to5) },
-  { combo: 'Стрит 2–6', points: String(SCORING.straight2to6) },
-  { combo: 'Стрит 1–6', points: String(SCORING.straight1to6) },
-];

@@ -1,4 +1,4 @@
-import { Button, Kbd, ProgressBar } from '../ui/index.ts';
+import { Button, Kbd } from '../ui/index.ts';
 import { actions, isMyTurn, selectionPoints, useStore } from '../store.ts';
 import { ReactionBubble, ReactionPicker } from './Reactions.tsx';
 
@@ -8,40 +8,55 @@ const Scoreboard = () => {
   const seat = useStore((s) => (s.mode === 'online' ? (s.room?.you ?? 0) : 0));
   if (!shown) return null;
 
+  const active = shown.phase === 'over' ? -1 : shown.current;
+  const [left, right] = shown.players;
+  if (!left || !right) return null;
+
+  const cells = [left, right].map((player, index) => {
+    const isActive = index === active;
+    const turn = isActive ? shown.turnScore : 0;
+    const picked = isActive && preview !== null ? preview : 0;
+    const side = index === 0 ? 'left' : 'right';
+    const who = index === seat ? { 'data-me': '' } : { 'data-foe': '' };
+    return { player, index, isActive, turn, picked, side, who };
+  });
+
   return (
-    <div className="scoreboard">
-      {shown.players.map((player, index) => {
-        const active = index === shown.current && shown.phase !== 'over';
-        return (
-          <article key={index} className="score-card" data-active={active ? '' : undefined}>
-            <header className="score-head">
-              <span className="score-name">
-                {player.name}
-                {index === seat && <span className="tag">вы</span>}
-                {shown.finalFrom === index && <span className="tag tag-goal">цель набрана</span>}
-              </span>
-              <span className="score-points">{player.score}</span>
-            </header>
-            <ProgressBar value={player.score} max={shown.target} label={`Прогресс ${player.name}`} />
-            <footer className="score-foot">
-              <span className="score-goal">Цель {shown.target}</span>
-              <span className="score-pills">
-                {active && shown.turnScore > 0 && (
-                  <span key={`t${shown.turnScore}`} className="pill pill-turn">
-                    В ходе {shown.turnScore}
-                  </span>
-                )}
-                {active && preview !== null && (
-                  <span key={`p${preview}`} className="pill pill-preview">
-                    +{preview}
-                  </span>
-                )}
-              </span>
-            </footer>
-            <ReactionBubble seat={index} />
-          </article>
-        );
-      })}
+    <div className="scoreboard" data-active={active}>
+      {cells.map(({ player, index, isActive, side, who }) => (
+        <div key={`n${index}`} className="sb-cell" data-seat={index} data-side={side} style={{ gridColumn: index === 0 ? 1 : 3, gridRow: 1 }} {...who}>
+          <span className="sb-name" data-active={isActive ? '' : undefined}>{player.name}</span>
+          {index === seat && <span className="tag">вы</span>}
+          {shown.finalFrom === index && <span className="sb-star" title="Цель набрана" aria-label="Цель набрана">★</span>}
+        </div>
+      ))}
+      <div className="sb-mid" style={{ gridColumn: 2, gridRow: 1 }}>Цель</div>
+
+      {cells.map(({ player, index, side, who }) => (
+        <div key={`s${index}`} className="sb-cell" data-side={side} style={{ gridColumn: index === 0 ? 1 : 3, gridRow: 2 }} {...who}>
+          <span className="sb-score">{player.score}</span>
+        </div>
+      ))}
+      <div className="sb-mid" style={{ gridColumn: 2, gridRow: 2 }}>
+        <span className="sb-target">{shown.target}</span>
+      </div>
+
+      {cells.map(({ index, turn, side }) => (
+        <div key={`t${index}`} className="sb-cell" data-side={side} style={{ gridColumn: index === 0 ? 1 : 3, gridRow: 3 }}>
+          <span key={turn} className="sb-sub" data-on={turn > 0 ? '' : undefined}>{turn}</span>
+        </div>
+      ))}
+      <div className="sb-mid" style={{ gridColumn: 2, gridRow: 3 }} title="Очки, набранные в этом ходу, но ещё не засчитанные">Кон</div>
+
+      {cells.map(({ index, picked, side }) => (
+        <div key={`p${index}`} className="sb-cell" data-side={side} style={{ gridColumn: index === 0 ? 1 : 3, gridRow: 4 }}>
+          <span key={picked} className="sb-sub" data-on={picked > 0 ? '' : undefined} data-preview={picked > 0 ? '' : undefined}>{picked}</span>
+        </div>
+      ))}
+      <div className="sb-mid" style={{ gridColumn: 2, gridRow: 4 }} title="Очки выбранных сейчас костей">Выбрано</div>
+
+      <ReactionBubble seat={0} />
+      <ReactionBubble seat={1} />
     </div>
   );
 };
@@ -141,8 +156,10 @@ const Log = () => {
 
 export const GameScreen = () => (
   <section className="hud">
-    <Scoreboard />
-    <TurnBadge />
+    <div className="hud-top">
+      <Scoreboard />
+      <TurnBadge />
+    </div>
     <Log />
     <Banner />
     <Controls />

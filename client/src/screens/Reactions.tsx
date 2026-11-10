@@ -9,7 +9,7 @@ export const ReactionBubble = ({ seat }: { seat: number }) => {
   if (!entry) return null;
   const reaction = reactionById(entry.reaction);
   return (
-    <div key={entry.id} className="reaction-bubble" data-emoji={reaction.emoji ? '' : undefined} role="status">
+    <div key={entry.id} className="reaction-bubble" data-seat={seat} data-emoji={reaction.emoji ? '' : undefined} role="status">
       {reaction.emoji ?? reaction.text}
     </div>
   );

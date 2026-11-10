@@ -1,5 +1,6 @@
 export { Button } from './Button.tsx';
 export { ChipGroup } from './ChipGroup.tsx';
+export { DiceFace } from './DiceFace.tsx';
 export { Dialog } from './Dialog.tsx';
 export { Input } from './Input.tsx';
 export { Kbd } from './Kbd.tsx';
